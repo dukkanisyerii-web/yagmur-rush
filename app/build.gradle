@@ -18,7 +18,7 @@ def forestZenAsset = file("src/main/res/drawable-nodpi/widget_clock_bg.webp")
 tasks.register("prepareForestZenAssets") {
     doLast {
         forestZenAsset.parentFile.mkdirs()
-        def parts = (0..4).collect { i ->
+        def parts = (0..2).collect { i ->
             rootProject.file(String.format(".github/assets/widget_clock_bg.part%02d", i))
         }
         if (parts.any { !it.exists() }) {
