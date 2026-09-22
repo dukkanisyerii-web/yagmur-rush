@@ -1,11 +1,66 @@
-<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
-    android:layout_width="match_parent" android:layout_height="match_parent"
-    android:orientation="vertical" android:gravity="center" android:padding="16dp"
-    android:background="@drawable/widget_bg">
-    <TextClock android:layout_width="wrap_content" android:layout_height="wrap_content"
-        android:format12Hour="h:mm" android:format24Hour="HH:mm"
-        android:textColor="#243421" android:textStyle="bold" android:textSize="34sp"/>
-    <TextClock android:layout_width="wrap_content" android:layout_height="wrap_content"
-        android:format12Hour="EEE, d MMM" android:format24Hour="EEE, d MMM"
-        android:textColor="#65745B" android:textSize="14sp"/>
-</LinearLayout>
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/clock_widget_root"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent">
+
+    <ImageView
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:src="@drawable/widget_clock_bg"
+        android:scaleType="centerCrop"
+        android:contentDescription="@null"/>
+
+    <View
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:background="@drawable/widget_image_scrim"/>
+
+    <LinearLayout
+        android:layout_width="wrap_content"
+        android:layout_height="match_parent"
+        android:layout_margin="12dp"
+        android:paddingLeft="16dp"
+        android:paddingRight="16dp"
+        android:paddingTop="10dp"
+        android:paddingBottom="10dp"
+        android:orientation="vertical"
+        android:gravity="center_vertical"
+        android:background="@drawable/widget_clock_glass">
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="FOREST ZEN"
+            android:textColor="#DDE8D8"
+            android:textSize="10sp"
+            android:textStyle="bold"
+            android:letterSpacing="0.14"/>
+
+        <TextClock
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:format12Hour="h:mm"
+            android:format24Hour="HH:mm"
+            android:textColor="#FFF9EE"
+            android:textSize="40sp"
+            android:fontFamily="serif"
+            android:includeFontPadding="false"/>
+
+        <TextClock
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:format12Hour="EEE, d MMM"
+            android:format24Hour="EEE, d MMM"
+            android:textColor="#E9E2D5"
+            android:textSize="13sp"
+            android:includeFontPadding="false"/>
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="3dp"
+            android:text="A calmer mind · A brighter you"
+            android:textColor="#C9D0C0"
+            android:textSize="9sp"/>
+    </LinearLayout>
+</FrameLayout>
