@@ -1,0 +1,7 @@
+<resources>
+    <item drawable="ic_phone"/><item drawable="ic_messages"/><item drawable="ic_camera"/><item drawable="ic_gallery"/>
+    <item drawable="ic_settings"/><item drawable="ic_browser"/><item drawable="ic_music"/><item drawable="ic_maps"/>
+    <item drawable="ic_calendar"/><item drawable="ic_whatsapp"/><item drawable="ic_instagram"/><item drawable="ic_spotify"/>
+    <item drawable="ic_youtube"/><item drawable="ic_discord"/><item drawable="ic_gmail"/><item drawable="ic_notion"/>
+    <item drawable="ic_pinterest"/><item drawable="ic_files"/>
+</resources>
