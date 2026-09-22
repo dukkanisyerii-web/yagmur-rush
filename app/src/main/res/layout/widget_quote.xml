@@ -1,0 +1,11 @@
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent" android:layout_height="match_parent"
+    android:orientation="vertical" android:gravity="center_vertical" android:padding="18dp"
+    android:background="@drawable/widget_bg">
+    <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
+        android:text="Peace lives here." android:textColor="#243421"
+        android:textStyle="bold" android:textSize="22sp"/>
+    <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
+        android:text="Reset · Refocus · Rebloom" android:textColor="#65745B"
+        android:textSize="13sp" android:layout_marginTop="5dp"/>
+</LinearLayout>
