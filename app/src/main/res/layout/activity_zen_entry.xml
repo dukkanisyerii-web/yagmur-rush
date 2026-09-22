@@ -1,0 +1,90 @@
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/zen_entry_root"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="#152014">
+
+    <ImageView
+        android:id="@+id/zen_entry_background"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:src="@drawable/widget_clock_bg"
+        android:scaleType="centerCrop"
+        android:contentDescription="@null"/>
+
+    <View
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:background="@drawable/entry_scrim"/>
+
+    <TextView
+        android:id="@+id/zen_entry_eyebrow"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="top|center_horizontal"
+        android:layout_marginTop="110dp"
+        android:text="FOREST  ZEN"
+        android:textColor="#F6F0E5"
+        android:textSize="15sp"
+        android:textStyle="bold"
+        android:letterSpacing="0.22"/>
+
+    <LinearLayout
+        android:id="@+id/zen_entry_glass"
+        android:layout_width="280dp"
+        android:layout_height="wrap_content"
+        android:layout_gravity="center"
+        android:orientation="vertical"
+        android:gravity="center"
+        android:paddingLeft="24dp"
+        android:paddingRight="24dp"
+        android:paddingTop="24dp"
+        android:paddingBottom="24dp"
+        android:background="@drawable/entry_glass">
+
+        <TextClock
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:format12Hour="h:mm"
+            android:format24Hour="HH:mm"
+            android:textColor="#FFF9EE"
+            android:textSize="68sp"
+            android:fontFamily="serif"
+            android:includeFontPadding="false"/>
+
+        <TextClock
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="4dp"
+            android:format12Hour="EEEE, d MMMM"
+            android:format24Hour="EEEE, d MMMM"
+            android:textColor="#E4E7DD"
+            android:textSize="15sp"/>
+
+        <View
+            android:layout_width="46dp"
+            android:layout_height="1dp"
+            android:layout_marginTop="18dp"
+            android:layout_marginBottom="14dp"
+            android:background="#99F4EBD8"/>
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Breathe · Reset · Refocus"
+            android:textColor="#F2EBDD"
+            android:textSize="14sp"
+            android:letterSpacing="0.06"/>
+    </LinearLayout>
+
+    <TextView
+        android:id="@+id/zen_entry_footer"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="bottom|center_horizontal"
+        android:layout_marginBottom="92dp"
+        android:text="A calmer mind · A brighter you"
+        android:textColor="#E7E1D5"
+        android:textSize="12sp"
+        android:letterSpacing="0.08"/>
+</FrameLayout>
