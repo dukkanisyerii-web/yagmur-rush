@@ -1,0 +1,11 @@
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent" android:layout_height="match_parent"
+    android:orientation="vertical" android:gravity="center" android:padding="16dp"
+    android:background="@drawable/widget_bg">
+    <TextClock android:layout_width="wrap_content" android:layout_height="wrap_content"
+        android:format12Hour="h:mm" android:format24Hour="HH:mm"
+        android:textColor="#243421" android:textStyle="bold" android:textSize="34sp"/>
+    <TextClock android:layout_width="wrap_content" android:layout_height="wrap_content"
+        android:format12Hour="EEE, d MMM" android:format24Hour="EEE, d MMM"
+        android:textColor="#65745B" android:textSize="14sp"/>
+</LinearLayout>
