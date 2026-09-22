@@ -1,0 +1,14 @@
+<resources>
+    <item component="ComponentInfo{com.google.android.youtube/com.google.android.youtube.HomeActivity}" drawable="ic_youtube"/>
+    <item component="ComponentInfo{com.spotify.music/com.spotify.music.MainActivity}" drawable="ic_spotify"/>
+    <item component="ComponentInfo{com.instagram.android/com.instagram.mainactivity.MainActivity}" drawable="ic_instagram"/>
+    <item component="ComponentInfo{com.whatsapp/com.whatsapp.Main}" drawable="ic_whatsapp"/>
+    <item component="ComponentInfo{com.discord/com.discord.main.MainActivity}" drawable="ic_discord"/>
+    <item component="ComponentInfo{com.google.android.gm/com.google.android.gm.ConversationListActivityGmail}" drawable="ic_gmail"/>
+    <item component="ComponentInfo{com.pinterest/com.pinterest.activity.PinterestActivity}" drawable="ic_pinterest"/>
+    <item component="ComponentInfo{com.google.android.apps.maps/com.google.android.maps.MapsActivity}" drawable="ic_maps"/>
+    <item component="ComponentInfo{com.sec.android.app.camera/com.sec.android.app.camera.Camera}" drawable="ic_camera"/>
+    <item component="ComponentInfo{com.sec.android.gallery3d/com.samsung.android.gallery.app.activity.GalleryActivity}" drawable="ic_gallery"/>
+    <item component="ComponentInfo{com.android.settings/com.android.settings.Settings}" drawable="ic_settings"/>
+    <item component="ComponentInfo{com.samsung.android.dialer/com.samsung.android.dialer.DialtactsActivity}" drawable="ic_phone"/>
+</resources>
