@@ -1,0 +1,360 @@
+name: Build Forest Zen APK
+
+on:
+  push:
+    branches: [forest-zen-apk-build]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install Android 16 SDK
+        run: sdkmanager "platform-tools" "platforms;android-36" "build-tools;35.0.0"
+
+      - name: Gradle 8.13
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.13'
+
+      - name: Generate Forest Zen Studio project
+        shell: bash
+        run: |
+          set -euo pipefail
+          ROOT="$RUNNER_TEMP/forestzen"
+          mkdir -p "$ROOT/app/src/main/java/com/forestzen/studio"
+          mkdir -p "$ROOT/app/src/main/res/layout" "$ROOT/app/src/main/res/drawable" "$ROOT/app/src/main/res/xml" "$ROOT/app/src/main/res/values" "$ROOT/app/src/main/assets"
+
+          cat > "$ROOT/settings.gradle" <<'EOF'
+          pluginManagement { repositories { google(); mavenCentral(); gradlePluginPortal() } }
+          dependencyResolutionManagement { repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS); repositories { google(); mavenCentral() } }
+          rootProject.name = 'ForestZenStudio'
+          include ':app'
+          EOF
+
+          cat > "$ROOT/build.gradle" <<'EOF'
+          plugins {
+              id 'com.android.application' version '8.13.0' apply false
+          }
+          EOF
+
+          cat > "$ROOT/app/build.gradle" <<'EOF'
+          plugins { id 'com.android.application' }
+          android {
+              namespace 'com.forestzen.studio'
+              compileSdk 36
+              defaultConfig {
+                  applicationId 'com.forestzen.studio'
+                  minSdk 26
+                  targetSdk 36
+                  versionCode 2
+                  versionName '1.1'
+              }
+          }
+          EOF
+
+          cat > "$ROOT/app/src/main/AndroidManifest.xml" <<'EOF'
+          <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+              <uses-permission android:name="android.permission.SET_WALLPAPER"/>
+              <application android:theme="@style/AppTheme" android:label="Forest Zen Studio" android:icon="@drawable/ic_launcher" android:allowBackup="true">
+                  <activity android:name=".MainActivity" android:exported="true">
+                      <intent-filter>
+                          <action android:name="android.intent.action.MAIN"/>
+                          <category android:name="android.intent.category.LAUNCHER"/>
+                      </intent-filter>
+                      <intent-filter><action android:name="org.adw.launcher.THEMES"/><category android:name="android.intent.category.DEFAULT"/></intent-filter>
+                      <intent-filter><action android:name="com.novalauncher.THEME"/><category android:name="android.intent.category.DEFAULT"/></intent-filter>
+                      <intent-filter><action android:name="android.intent.action.MAIN"/><category android:name="com.anddoes.launcher.THEME"/></intent-filter>
+                  </activity>
+                  <receiver android:name=".ZenQuoteWidget" android:exported="false">
+                      <intent-filter><action android:name="android.appwidget.action.APPWIDGET_UPDATE"/></intent-filter>
+                      <meta-data android:name="android.appwidget.provider" android:resource="@xml/quote_widget_info"/>
+                  </receiver>
+                  <receiver android:name=".ZenClockWidget" android:exported="false">
+                      <intent-filter><action android:name="android.appwidget.action.APPWIDGET_UPDATE"/></intent-filter>
+                      <meta-data android:name="android.appwidget.provider" android:resource="@xml/clock_widget_info"/>
+                  </receiver>
+              </application>
+          </manifest>
+          EOF
+
+          cat > "$ROOT/app/src/main/java/com/forestzen/studio/MainActivity.java" <<'EOF'
+          package com.forestzen.studio;
+
+          import android.app.Activity;
+          import android.app.WallpaperManager;
+          import android.appwidget.AppWidgetManager;
+          import android.content.ComponentName;
+          import android.content.Intent;
+          import android.graphics.Bitmap;
+          import android.graphics.Canvas;
+          import android.graphics.Color;
+          import android.graphics.LinearGradient;
+          import android.graphics.Paint;
+          import android.graphics.Path;
+          import android.graphics.Shader;
+          import android.os.Bundle;
+          import android.provider.Settings;
+          import android.widget.ImageView;
+          import android.widget.Toast;
+          import java.io.IOException;
+
+          public class MainActivity extends Activity {
+              private Bitmap wallpaper;
+
+              @Override public void onCreate(Bundle b) {
+                  super.onCreate(b);
+                  setContentView(R.layout.activity_main);
+                  wallpaper = createForestWallpaper(1440, 3200);
+                  ((ImageView) findViewById(R.id.preview)).setImageBitmap(wallpaper);
+                  findViewById(R.id.homeWallpaper).setOnClickListener(v -> applyWallpaper(WallpaperManager.FLAG_SYSTEM));
+                  findViewById(R.id.lockWallpaper).setOnClickListener(v -> applyWallpaper(WallpaperManager.FLAG_LOCK));
+                  findViewById(R.id.bothWallpaper).setOnClickListener(v -> applyWallpaper(WallpaperManager.FLAG_SYSTEM | WallpaperManager.FLAG_LOCK));
+                  findViewById(R.id.addQuote).setOnClickListener(v -> pinWidget(ZenQuoteWidget.class));
+                  findViewById(R.id.addClock).setOnClickListener(v -> pinWidget(ZenClockWidget.class));
+                  findViewById(R.id.openThemePark).setOnClickListener(v -> openPackage("com.samsung.android.themedesigner", "Theme Park yüklü değil. Good Lock / Galaxy Store içinden yükleyebilirsin."));
+                  findViewById(R.id.openFont).setOnClickListener(v -> safeStart(new Intent(Settings.ACTION_DISPLAY_SETTINGS)));
+                  findViewById(R.id.openLockSettings).setOnClickListener(v -> safeStart(new Intent(Settings.ACTION_SECURITY_SETTINGS)));
+              }
+
+              private void applyWallpaper(int flags) {
+                  try {
+                      WallpaperManager.getInstance(this).setBitmap(wallpaper, null, true, flags);
+                      toast("Forest Zen uygulandı");
+                  } catch (IOException | SecurityException e) {
+                      toast("Duvar kağıdı uygulanamadı: " + e.getMessage());
+                  }
+              }
+
+              private void pinWidget(Class<?> provider) {
+                  AppWidgetManager m = AppWidgetManager.getInstance(this);
+                  if (!m.isRequestPinAppWidgetSupported()) {
+                      toast("Ana ekrana basılı tut → Widget'lar → Forest Zen Studio");
+                      return;
+                  }
+                  m.requestPinAppWidget(new ComponentName(this, provider), null, null);
+              }
+
+              private void openPackage(String pkg, String fail) {
+                  Intent i = getPackageManager().getLaunchIntentForPackage(pkg);
+                  if (i != null) startActivity(i); else toast(fail);
+              }
+
+              private void safeStart(Intent i) {
+                  try { startActivity(i); } catch (Exception e) { toast("Ayar ekranı açılamadı."); }
+              }
+
+              private void toast(String s) { Toast.makeText(this, s, Toast.LENGTH_LONG).show(); }
+
+              private Bitmap createForestWallpaper(int w, int h) {
+                  Bitmap bm = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888);
+                  Canvas c = new Canvas(bm);
+                  Paint p = new Paint(Paint.ANTI_ALIAS_FLAG);
+                  LinearGradient sky = new LinearGradient(0, 0, 0, h,
+                      new int[]{Color.rgb(220,211,193), Color.rgb(150,160,130), Color.rgb(42,62,38)}, null, Shader.TileMode.CLAMP);
+                  p.setShader(sky); c.drawRect(0,0,w,h,p); p.setShader(null);
+
+                  p.setColor(Color.argb(70, 245, 238, 221));
+                  for (int y=420; y<1750; y+=230) c.drawOval(-260,y,w+260,y+320,p);
+
+                  Path far = new Path();
+                  far.moveTo(0,2080); far.cubicTo(250,1820,510,1890,760,1650); far.cubicTo(1030,1410,1220,1770,w,1510); far.lineTo(w,h); far.lineTo(0,h); far.close();
+                  p.setColor(Color.rgb(75,96,65)); c.drawPath(far,p);
+
+                  Path near = new Path();
+                  near.moveTo(0,2470); near.cubicTo(360,2180,720,2250,w,1910); near.lineTo(w,h); near.lineTo(0,h); near.close();
+                  p.setColor(Color.rgb(35,55,33)); c.drawPath(near,p);
+
+                  p.setColor(Color.argb(150, 232, 224, 206)); c.drawCircle(1110, 420, 155, p);
+                  p.setColor(Color.argb(95, 26, 48, 26));
+                  for (int k=0; k<7; k++) { float x=50+k*220; c.drawOval(x,1170+k*55,x+180,1510+k*55,p); }
+                  return bm;
+              }
+          }
+          EOF
+
+          cat > "$ROOT/app/src/main/java/com/forestzen/studio/ZenClockWidget.java" <<'EOF'
+          package com.forestzen.studio;
+          import android.appwidget.AppWidgetProvider;
+          public class ZenClockWidget extends AppWidgetProvider {}
+          EOF
+
+          cat > "$ROOT/app/src/main/java/com/forestzen/studio/ZenQuoteWidget.java" <<'EOF'
+          package com.forestzen.studio;
+          import android.appwidget.AppWidgetProvider;
+          public class ZenQuoteWidget extends AppWidgetProvider {}
+          EOF
+
+          cat > "$ROOT/app/src/main/res/values/strings.xml" <<'EOF'
+          <resources>
+              <string name="app_name">Forest Zen Studio</string>
+              <string name="clock_title">Forest Zen Clock</string>
+              <string name="quote_title">Forest Zen Quote</string>
+          </resources>
+          EOF
+
+          cat > "$ROOT/app/src/main/res/values/colors.xml" <<'EOF'
+          <resources>
+              <color name="forest">#243421</color>
+              <color name="sage">#65745B</color>
+              <color name="cream">#E9E3D7</color>
+          </resources>
+          EOF
+
+          cat > "$ROOT/app/src/main/res/values/themes.xml" <<'EOF'
+          <resources>
+              <style name="AppTheme" parent="android:style/Theme.Material.Light.NoActionBar">
+                  <item name="android:fontFamily">sans</item>
+                  <item name="android:windowLightStatusBar">false</item>
+                  <item name="android:statusBarColor">#243421</item>
+                  <item name="android:navigationBarColor">#243421</item>
+                  <item name="android:colorAccent">#65745B</item>
+              </style>
+          </resources>
+          EOF
+
+          cat > "$ROOT/app/src/main/res/drawable/button_primary.xml" <<'EOF'
+          <shape xmlns:android="http://schemas.android.com/apk/res/android" android:shape="rectangle">
+              <solid android:color="#43563C"/><corners android:radius="18dp"/><padding android:left="16dp" android:right="16dp" android:top="12dp" android:bottom="12dp"/>
+          </shape>
+          EOF
+
+          cat > "$ROOT/app/src/main/res/drawable/button_secondary.xml" <<'EOF'
+          <shape xmlns:android="http://schemas.android.com/apk/res/android" android:shape="rectangle">
+              <solid android:color="#D9D2C3"/><corners android:radius="18dp"/><stroke android:width="1dp" android:color="#9AA18C"/>
+          </shape>
+          EOF
+
+          cat > "$ROOT/app/src/main/res/drawable/card.xml" <<'EOF'
+          <shape xmlns:android="http://schemas.android.com/apk/res/android" android:shape="rectangle">
+              <solid android:color="#D9D2C3"/><corners android:radius="28dp"/>
+          </shape>
+          EOF
+
+          cat > "$ROOT/app/src/main/res/drawable/widget_bg.xml" <<'EOF'
+          <shape xmlns:android="http://schemas.android.com/apk/res/android" android:shape="rectangle">
+              <solid android:color="#EEDFD7CB"/><corners android:radius="24dp"/><stroke android:width="1dp" android:color="#55FFFFFF"/>
+          </shape>
+          EOF
+
+          cat > "$ROOT/app/src/main/res/drawable/ic_launcher.xml" <<'EOF'
+          <vector xmlns:android="http://schemas.android.com/apk/res/android" android:width="108dp" android:height="108dp" android:viewportWidth="108" android:viewportHeight="108">
+              <path android:fillColor="#243421" android:pathData="M0,0h108v108h-108z"/>
+              <path android:fillColor="#E9E3D7" android:pathData="M54,19C38,30 27,43 28,60c1,14 11,25 26,29 15,-4 25,-15 26,-29 1,-17 -10,-30 -26,-41z"/>
+              <path android:fillColor="#65745B" android:pathData="M53,33h3v45h-3zM54,51c-10,-7 -17,-7 -22,-5 6,2 13,6 22,14zM55,61c11,-8 18,-8 23,-5 -7,2 -14,7 -23,15z"/>
+          </vector>
+          EOF
+
+          cat > "$ROOT/app/src/main/res/layout/activity_main.xml" <<'EOF'
+          <ScrollView xmlns:android="http://schemas.android.com/apk/res/android" android:layout_width="match_parent" android:layout_height="match_parent" android:background="#E9E3D7">
+              <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical" android:padding="22dp">
+                  <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:text="FOREST ZEN" android:textColor="#243421" android:textSize="32sp" android:textStyle="bold" android:letterSpacing="0.08"/>
+                  <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:text="One UI ana ekranın kalsın. Tema parçalarını buradan uygula." android:textColor="#52604C" android:textSize="16sp" android:layout_marginTop="6dp" android:layout_marginBottom="18dp"/>
+                  <ImageView android:id="@+id/preview" android:layout_width="match_parent" android:layout_height="320dp" android:scaleType="centerCrop" android:background="@drawable/card" android:contentDescription="Forest Zen wallpaper preview"/>
+                  <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Duvar kağıdı" android:textColor="#243421" android:textStyle="bold" android:textSize="20sp" android:layout_marginTop="22dp"/>
+                  <Button android:id="@+id/homeWallpaper" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Ana ekrana uygula" android:textColor="#F6F0E5" android:background="@drawable/button_primary" android:layout_marginTop="10dp"/>
+                  <Button android:id="@+id/lockWallpaper" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Kilit ekranına uygula" android:textColor="#F6F0E5" android:background="@drawable/button_primary" android:layout_marginTop="10dp"/>
+                  <Button android:id="@+id/bothWallpaper" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="İkisine birden uygula" android:textColor="#F6F0E5" android:background="@drawable/button_primary" android:layout_marginTop="10dp"/>
+                  <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Widget'lar" android:textColor="#243421" android:textStyle="bold" android:textSize="20sp" android:layout_marginTop="24dp"/>
+                  <Button android:id="@+id/addQuote" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Forest Zen söz widget'ı ekle" android:textColor="#243421" android:background="@drawable/button_secondary" android:layout_marginTop="10dp"/>
+                  <Button android:id="@+id/addClock" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Forest Zen saat widget'ı ekle" android:textColor="#243421" android:background="@drawable/button_secondary" android:layout_marginTop="10dp"/>
+                  <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:text="İkonlar" android:textColor="#243421" android:textStyle="bold" android:textSize="20sp" android:layout_marginTop="24dp"/>
+                  <Button android:id="@+id/openThemePark" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Theme Park → Icons → Iconpack" android:textColor="#F6F0E5" android:background="@drawable/button_primary" android:layout_marginTop="10dp"/>
+                  <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Sistem görünümü" android:textColor="#243421" android:textStyle="bold" android:textSize="20sp" android:layout_marginTop="24dp"/>
+                  <Button android:id="@+id/openFont" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Yazı tipi ayarlarını aç" android:textColor="#243421" android:background="@drawable/button_secondary" android:layout_marginTop="10dp"/>
+                  <Button android:id="@+id/openLockSettings" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Kilit ekranı ayarlarını aç" android:textColor="#243421" android:background="@drawable/button_secondary" android:layout_marginTop="10dp" android:layout_marginBottom="26dp"/>
+              </LinearLayout>
+          </ScrollView>
+          EOF
+
+          cat > "$ROOT/app/src/main/res/layout/widget_clock.xml" <<'EOF'
+          <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android" android:layout_width="match_parent" android:layout_height="match_parent" android:orientation="vertical" android:gravity="center" android:padding="16dp" android:background="@drawable/widget_bg">
+              <TextClock android:layout_width="wrap_content" android:layout_height="wrap_content" android:format12Hour="h:mm" android:format24Hour="HH:mm" android:textColor="#243421" android:textStyle="bold" android:textSize="34sp"/>
+              <TextClock android:layout_width="wrap_content" android:layout_height="wrap_content" android:format12Hour="EEE, d MMM" android:format24Hour="EEE, d MMM" android:textColor="#65745B" android:textSize="14sp"/>
+          </LinearLayout>
+          EOF
+
+          cat > "$ROOT/app/src/main/res/layout/widget_quote.xml" <<'EOF'
+          <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android" android:layout_width="match_parent" android:layout_height="match_parent" android:orientation="vertical" android:gravity="center_vertical" android:padding="18dp" android:background="@drawable/widget_bg">
+              <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Peace lives here." android:textColor="#243421" android:textStyle="bold" android:textSize="22sp"/>
+              <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Reset · Refocus · Rebloom" android:textColor="#65745B" android:textSize="13sp" android:layout_marginTop="5dp"/>
+          </LinearLayout>
+          EOF
+
+          cat > "$ROOT/app/src/main/res/xml/clock_widget_info.xml" <<'EOF'
+          <appwidget-provider xmlns:android="http://schemas.android.com/apk/res/android" android:minWidth="180dp" android:minHeight="110dp" android:updatePeriodMillis="0" android:initialLayout="@layout/widget_clock" android:resizeMode="horizontal|vertical" android:widgetCategory="home_screen" android:description="@string/clock_title"/>
+          EOF
+
+          cat > "$ROOT/app/src/main/res/xml/quote_widget_info.xml" <<'EOF'
+          <appwidget-provider xmlns:android="http://schemas.android.com/apk/res/android" android:minWidth="250dp" android:minHeight="110dp" android:updatePeriodMillis="0" android:initialLayout="@layout/widget_quote" android:resizeMode="horizontal|vertical" android:widgetCategory="home_screen" android:description="@string/quote_title"/>
+          EOF
+
+          ICON_XML='<vector xmlns:android="http://schemas.android.com/apk/res/android" android:width="96dp" android:height="96dp" android:viewportWidth="96" android:viewportHeight="96"><path android:fillColor="#D9D2C3" android:pathData="M8,8h80v80h-80z"/><path android:fillColor="#43563C" android:pathData="M48,20C35,29 27,39 28,53c1,12 8,20 20,24 12,-4 19,-12 20,-24 1,-14 -7,-24 -20,-33zM47,34h3v31h-3zM48,45c-8,-5 -13,-5 -17,-3 5,2 10,5 17,10zM49,52c8,-6 14,-6 18,-4 -5,2 -11,5 -18,11z"/></vector>'
+          for n in phone messages camera gallery settings browser music maps calendar whatsapp instagram spotify youtube discord gmail notion pinterest files; do
+            printf '%s
+' "$ICON_XML" > "$ROOT/app/src/main/res/drawable/ic_${n}.xml"
+          done
+
+          cat > "$ROOT/app/src/main/assets/appfilter.xml" <<'EOF'
+          <resources>
+              <item component="ComponentInfo{com.google.android.youtube/com.google.android.youtube.HomeActivity}" drawable="ic_youtube" />
+              <item component="ComponentInfo{com.spotify.music/com.spotify.music.MainActivity}" drawable="ic_spotify" />
+              <item component="ComponentInfo{com.instagram.android/com.instagram.mainactivity.MainActivity}" drawable="ic_instagram" />
+              <item component="ComponentInfo{com.whatsapp/com.whatsapp.Main}" drawable="ic_whatsapp" />
+              <item component="ComponentInfo{com.discord/com.discord.main.MainActivity}" drawable="ic_discord" />
+              <item component="ComponentInfo{com.google.android.gm/com.google.android.gm.ConversationListActivityGmail}" drawable="ic_gmail" />
+              <item component="ComponentInfo{com.pinterest/com.pinterest.activity.PinterestActivity}" drawable="ic_pinterest" />
+              <item component="ComponentInfo{com.google.android.apps.maps/com.google.android.maps.MapsActivity}" drawable="ic_maps" />
+              <item component="ComponentInfo{com.sec.android.app.camera/com.sec.android.app.camera.Camera}" drawable="ic_camera" />
+              <item component="ComponentInfo{com.sec.android.gallery3d/com.samsung.android.gallery.app.activity.GalleryActivity}" drawable="ic_gallery" />
+              <item component="ComponentInfo{com.android.settings/com.android.settings.Settings}" drawable="ic_settings" />
+              <item component="ComponentInfo{com.samsung.android.dialer/com.samsung.android.dialer.DialtactsActivity}" drawable="ic_phone" />
+          </resources>
+          EOF
+          cp "$ROOT/app/src/main/assets/appfilter.xml" "$ROOT/app/src/main/res/xml/appfilter.xml"
+
+          cat > "$ROOT/app/src/main/assets/drawable.xml" <<'EOF'
+          <resources>
+              <item drawable="ic_phone"/><item drawable="ic_messages"/><item drawable="ic_camera"/><item drawable="ic_gallery"/>
+              <item drawable="ic_settings"/><item drawable="ic_browser"/><item drawable="ic_music"/><item drawable="ic_maps"/>
+              <item drawable="ic_calendar"/><item drawable="ic_whatsapp"/><item drawable="ic_instagram"/><item drawable="ic_spotify"/>
+              <item drawable="ic_youtube"/><item drawable="ic_discord"/><item drawable="ic_gmail"/><item drawable="ic_notion"/>
+              <item drawable="ic_pinterest"/><item drawable="ic_files"/>
+          </resources>
+          EOF
+          cp "$ROOT/app/src/main/assets/drawable.xml" "$ROOT/app/src/main/res/xml/drawable.xml"
+
+          echo "PROJECT_ROOT=$ROOT" >> "$GITHUB_ENV"
+
+      - name: Build APK
+        run: gradle --no-daemon :app:assembleDebug
+        working-directory: ${{ env.PROJECT_ROOT }}
+
+      - name: Verify APK
+        run: |
+          test -f "$PROJECT_ROOT/app/build/outputs/apk/debug/app-debug.apk"
+          ls -lh "$PROJECT_ROOT/app/build/outputs/apk/debug/app-debug.apk"
+          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose "$PROJECT_ROOT/app/build/outputs/apk/debug/app-debug.apk"
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: ForestZenStudio-debug-apk
+          path: ${{ env.PROJECT_ROOT }}/app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
