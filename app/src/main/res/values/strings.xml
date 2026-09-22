@@ -1,0 +1,5 @@
+<resources>
+    <string name="app_name">Forest Zen Studio</string>
+    <string name="clock_title">Forest Zen Clock</string>
+    <string name="quote_title">Forest Zen Quote</string>
+</resources>
