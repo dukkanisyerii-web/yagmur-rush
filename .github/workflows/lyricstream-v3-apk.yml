@@ -57,27 +57,27 @@ jobs:
         run: |
           set -euo pipefail
           chmod +x "$RUNNER_TEMP/lyricstream-src/lyricstream_overlay_v3/bootstrap.sh"
-          "$RUNNER_TEMP/lyricstream-src/lyricstream_overlay_v3/bootstrap.sh" "$RUNNER_TEMP/lyricstream-build"
+          "$RUNNER_TEMP/lyricstream-src/lyricstream_overlay_v3/bootstrap.sh" "$RUNNER_TEMP/lyricstream_build"
 
       - name: Flutter analyze
         continue-on-error: true
-        working-directory: ${{ runner.temp }}/lyricstream-build
+        working-directory: ${{ runner.temp }}/lyricstream_build
         run: flutter analyze
 
       - name: Flutter tests
         continue-on-error: true
-        working-directory: ${{ runner.temp }}/lyricstream-build
+        working-directory: ${{ runner.temp }}/lyricstream_build
         run: flutter test
 
       - name: Build release APK
-        working-directory: ${{ runner.temp }}/lyricstream-build
+        working-directory: ${{ runner.temp }}/lyricstream_build
         run: flutter build apk --release
 
       - name: Prepare APK
         shell: bash
         run: |
           set -euo pipefail
-          cp "$RUNNER_TEMP/lyricstream-build/build/app/outputs/flutter-apk/app-release.apk" "$GITHUB_WORKSPACE/LyricStream-v3-release.apk"
+          cp "$RUNNER_TEMP/lyricstream_build/build/app/outputs/flutter-apk/app-release.apk" "$GITHUB_WORKSPACE/LyricStream-v3-release.apk"
           sha256sum "$GITHUB_WORKSPACE/LyricStream-v3-release.apk" | tee "$GITHUB_WORKSPACE/LyricStream-v3-release.apk.sha256"
 
       - name: Upload APK
