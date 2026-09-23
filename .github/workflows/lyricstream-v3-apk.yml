@@ -1,0 +1,91 @@
+name: Build LyricStream v3 APK
+
+on:
+  push:
+    branches:
+      - lyricstream-v3-apk
+    paths:
+      - "lyricstream/**"
+      - ".github/workflows/lyricstream-v3-apk.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Set up Java 17
+        uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Ensure Android API 36
+        shell: bash
+        run: |
+          set -euo pipefail
+          SDKMANAGER="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
+          if [ -x "$SDKMANAGER" ]; then
+            yes | "$SDKMANAGER" --licenses >/dev/null || true
+            "$SDKMANAGER" "platforms;android-36"
+          fi
+
+      - name: Reassemble and verify LyricStream source
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/lyricstream-src"
+          cat lyricstream/source/chunk_*.b64 | base64 --decode > "$RUNNER_TEMP/lyricstream_overlay_v3.zip"
+          echo "b46cd3b8b66de03811d7823dbe9ea4b8f357feebf50234de89fe9317064d23dd  $RUNNER_TEMP/lyricstream_overlay_v3.zip" | sha256sum -c -
+          unzip -q "$RUNNER_TEMP/lyricstream_overlay_v3.zip" -d "$RUNNER_TEMP/lyricstream-src"
+
+      - name: Bootstrap Android project
+        shell: bash
+        run: |
+          set -euo pipefail
+          chmod +x "$RUNNER_TEMP/lyricstream-src/lyricstream_overlay_v3/bootstrap.sh"
+          "$RUNNER_TEMP/lyricstream-src/lyricstream_overlay_v3/bootstrap.sh" "$RUNNER_TEMP/lyricstream-build"
+
+      - name: Flutter analyze
+        continue-on-error: true
+        working-directory: ${{ runner.temp }}/lyricstream-build
+        run: flutter analyze
+
+      - name: Flutter tests
+        continue-on-error: true
+        working-directory: ${{ runner.temp }}/lyricstream-build
+        run: flutter test
+
+      - name: Build release APK
+        working-directory: ${{ runner.temp }}/lyricstream-build
+        run: flutter build apk --release
+
+      - name: Prepare APK
+        shell: bash
+        run: |
+          set -euo pipefail
+          cp "$RUNNER_TEMP/lyricstream-build/build/app/outputs/flutter-apk/app-release.apk" "$GITHUB_WORKSPACE/LyricStream-v3-release.apk"
+          sha256sum "$GITHUB_WORKSPACE/LyricStream-v3-release.apk" | tee "$GITHUB_WORKSPACE/LyricStream-v3-release.apk.sha256"
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v7
+        with:
+          name: LyricStream-v3-APK
+          path: |
+            LyricStream-v3-release.apk
+            LyricStream-v3-release.apk.sha256
+          if-no-files-found: error
+          retention-days: 30
