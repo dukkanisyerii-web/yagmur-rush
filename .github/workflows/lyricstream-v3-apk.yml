@@ -117,24 +117,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          python3 - <<'PY'
-          from pathlib import Path
-          p = Path(__import__("os").environ["RUNNER_TEMP"]) / "lyricstream_build/android/app/src/main/kotlin/com/example/lyricstream/BillingManager.kt"
-          s = p.read_text()
-          old = '''        val product = BillingFlowParams.ProductDetailsParams.newBuilder()
-            .setProductDetails(pd)
-            .setOfferToken(offer.offerToken)
-            .build()
-'''
-          new = '''        val productBuilder = BillingFlowParams.ProductDetailsParams.newBuilder()
-            .setProductDetails(pd)
-        offer.offerToken?.let(productBuilder::setOfferToken)
-        val product = productBuilder.build()
-'''
-          if old not in s:
-              raise SystemExit("BillingManager patch target not found")
-          p.write_text(s.replace(old, new))
-          PY
+          python3 -c 'from pathlib import Path; import os; p=Path(os.environ["RUNNER_TEMP"])/"lyricstream_build/android/app/src/main/kotlin/com/example/lyricstream/BillingManager.kt"; s=p.read_text(); old="        val product = BillingFlowParams.ProductDetailsParams.newBuilder()\\n            .setProductDetails(pd)\\n            .setOfferToken(offer.offerToken)\\n            .build()\\n"; new="        val productBuilder = BillingFlowParams.ProductDetailsParams.newBuilder()\\n            .setProductDetails(pd)\\n        offer.offerToken?.let(productBuilder::setOfferToken)\\n        val product = productBuilder.build()\\n"; assert old in s, "BillingManager patch target not found"; p.write_text(s.replace(old,new))'
 
       - name: Flutter analyze
         continue-on-error: true
