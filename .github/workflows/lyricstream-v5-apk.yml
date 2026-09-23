@@ -137,6 +137,14 @@ jobs:
           grep -q 'setOfferToken(offer.offerToken)' "$FILE"
           sed -i 's/setOfferToken(offer\.offerToken)/setOfferToken(offer.offerToken ?: return BillingClient.BillingResponseCode.ITEM_UNAVAILABLE)/' "$FILE"
 
+      - name: Patch v5 control center enum pairs
+        shell: bash
+        run: |
+          set -euo pipefail
+          FILE="$RUNNER_TEMP/lyricstream_build/android/app/src/main/kotlin/com/example/lyricstream/InGameControlCenterView.kt"
+          sed -i 's/to settings\.hudSkin == HudSkin\.AURORA/to (settings.hudSkin == HudSkin.AURORA)/' "$FILE"
+          sed -i 's/to settings\.adaptiveThemeMode != AdaptiveThemeMode\.OFF/to (settings.adaptiveThemeMode != AdaptiveThemeMode.OFF)/' "$FILE"
+
       - name: Flutter analyze
         continue-on-error: true
         working-directory: ${{ runner.temp }}/lyricstream_build
