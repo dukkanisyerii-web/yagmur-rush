@@ -134,7 +134,7 @@ jobs:
         run: |
           set -euo pipefail
           VIEW="$RUNNER_TEMP/lyricstream_build/android/app/src/main/kotlin/com/example/lyricstream/LyricOverlayView.kt"
-          python3 -c 'from pathlib import Path; import os; p=Path(os.environ["RUNNER_TEMP"])/"lyricstream_build/android/app/src/main/kotlin/com/example/lyricstream/LyricOverlayView.kt"; s=p.read_text(); old="        c.clipRoundRect(rect, radius, radius)"; new="        val clipPath = Path().apply { addRoundRect(rect, radius, radius, Path.Direction.CW) }\\n        c.clipPath(clipPath)"; assert old in s; p.write_text(s.replace(old,new))'
+          python3 -c 'from pathlib import Path; import os; p=Path(os.environ["RUNNER_TEMP"])/"lyricstream_build/android/app/src/main/kotlin/com/example/lyricstream/LyricOverlayView.kt"; s=p.read_text(); old="        c.clipRoundRect(rect, radius, radius)"; new="        val clipPath = Path().apply { addRoundRect(rect, radius, radius, Path.Direction.CW) }; c.clipPath(clipPath)"; assert old in s; p.write_text(s.replace(old,new))'
           mkdir -p "$RUNNER_TEMP/lyricstream_build/android/app/src/main/res/values"
           cat > "$RUNNER_TEMP/lyricstream_build/android/app/src/main/res/values/strings.xml" <<'EOF'
           <?xml version="1.0" encoding="utf-8"?>
