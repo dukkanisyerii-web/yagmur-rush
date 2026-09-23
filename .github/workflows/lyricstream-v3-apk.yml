@@ -117,7 +117,9 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          python3 -c 'from pathlib import Path; import os; p=Path(os.environ["RUNNER_TEMP"])/"lyricstream_build/android/app/src/main/kotlin/com/example/lyricstream/BillingManager.kt"; s=p.read_text(); old="        val product = BillingFlowParams.ProductDetailsParams.newBuilder()\\n            .setProductDetails(pd)\\n            .setOfferToken(offer.offerToken)\\n            .build()\\n"; new="        val productBuilder = BillingFlowParams.ProductDetailsParams.newBuilder()\\n            .setProductDetails(pd)\\n        offer.offerToken?.let(productBuilder::setOfferToken)\\n        val product = productBuilder.build()\\n"; assert old in s, "BillingManager patch target not found"; p.write_text(s.replace(old,new))'
+          FILE="$RUNNER_TEMP/lyricstream_build/android/app/src/main/kotlin/com/example/lyricstream/BillingManager.kt"
+          grep -q 'setOfferToken(offer.offerToken)' "$FILE"
+          sed -i 's/setOfferToken(offer\.offerToken)/setOfferToken(offer.offerToken ?: return BillingClient.BillingResponseCode.ITEM_UNAVAILABLE)/' "$FILE"
 
       - name: Flutter analyze
         continue-on-error: true
