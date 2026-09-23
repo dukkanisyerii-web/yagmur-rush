@@ -113,6 +113,29 @@ jobs:
           }
           EOF
 
+      - name: Patch Billing 9 nullable offer token
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path(__import__("os").environ["RUNNER_TEMP"]) / "lyricstream_build/android/app/src/main/kotlin/com/example/lyricstream/BillingManager.kt"
+          s = p.read_text()
+          old = '''        val product = BillingFlowParams.ProductDetailsParams.newBuilder()
+            .setProductDetails(pd)
+            .setOfferToken(offer.offerToken)
+            .build()
+'''
+          new = '''        val productBuilder = BillingFlowParams.ProductDetailsParams.newBuilder()
+            .setProductDetails(pd)
+        offer.offerToken?.let(productBuilder::setOfferToken)
+        val product = productBuilder.build()
+'''
+          if old not in s:
+              raise SystemExit("BillingManager patch target not found")
+          p.write_text(s.replace(old, new))
+          PY
+
       - name: Flutter analyze
         continue-on-error: true
         working-directory: ${{ runner.temp }}/lyricstream_build
