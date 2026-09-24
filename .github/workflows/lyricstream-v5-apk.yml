@@ -145,6 +145,21 @@ jobs:
           sed -i 's/to settings\.hudSkin == HudSkin\.AURORA/to (settings.hudSkin == HudSkin.AURORA)/' "$FILE"
           sed -i 's/to settings\.adaptiveThemeMode != AdaptiveThemeMode\.OFF/to (settings.adaptiveThemeMode != AdaptiveThemeMode.OFF)/' "$FILE"
 
+      - name: Package generated v5 source snapshot
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "$RUNNER_TEMP/lyricstream_build"
+          zip -qr "$GITHUB_WORKSPACE/LyricStream-v5-source.zip" android/app/src/main lib
+
+      - name: Upload v5 source snapshot
+        uses: actions/upload-artifact@v7
+        with:
+          name: LyricStream-v5-Source
+          path: LyricStream-v5-source.zip
+          if-no-files-found: error
+          retention-days: 7
+
       - name: Flutter analyze
         continue-on-error: true
         working-directory: ${{ runner.temp }}/lyricstream_build
