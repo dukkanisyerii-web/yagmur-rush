@@ -1,0 +1,33 @@
+name: Inspect LyricStream v6 Renderer
+on:
+  push:
+    branches:
+      - lyricstream-v7-founder
+    paths:
+      - ".github/workflows/inspect-v6-renderer.yml"
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - name: Reassemble v6 overrides
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/v6"
+          cat lyricstream/v6/overrides/part_*.b64 | base64 --decode > "$RUNNER_TEMP/v6.zip"
+          echo "da30bf902f548b3488317949c4a57c219b7174391f61705a2951ab5674355e4d  $RUNNER_TEMP/v6.zip" | sha256sum -c -
+          unzip -q "$RUNNER_TEMP/v6.zip" -d "$RUNNER_TEMP/v6"
+          cp "$RUNNER_TEMP/v6/android/app/src/main/kotlin/com/example/lyricstream/LyricOverlayView.kt" "$GITHUB_WORKSPACE/LyricOverlayView-v6.kt"
+          cp "$RUNNER_TEMP/v6/android/app/src/main/kotlin/com/example/lyricstream/OverlaySettings.kt" "$GITHUB_WORKSPACE/OverlaySettings-v6.kt"
+      - name: Upload renderer source
+        uses: actions/upload-artifact@v7
+        with:
+          name: LyricStream-v6-Renderer-Source
+          path: |
+            LyricOverlayView-v6.kt
+            OverlaySettings-v6.kt
+          retention-days: 2
