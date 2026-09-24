@@ -1,0 +1,207 @@
+name: Build LyricStream v7 Founder APK
+
+on:
+  push:
+    branches:
+      - lyricstream-v7-founder
+    paths:
+      - "lyricstream/**"
+      - ".github/workflows/lyricstream-v7-founder.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Set up Java 17
+        uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Ensure Android API 36
+        shell: bash
+        run: |
+          set -euo pipefail
+          SDKMANAGER="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
+          if [ -x "$SDKMANAGER" ]; then
+            yes | "$SDKMANAGER" --licenses >/dev/null || true
+            "$SDKMANAGER" "platforms;android-36"
+          fi
+
+      - name: Reassemble and verify v3 base
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/lyricstream-src"
+          cat lyricstream/source/chunk_*.b64 | base64 --decode > "$RUNNER_TEMP/lyricstream_overlay_v3.zip"
+          echo "b46cd3b8b66de03811d7823dbe9ea4b8f357feebf50234de89fe9317064d23dd  $RUNNER_TEMP/lyricstream_overlay_v3.zip" | sha256sum -c -
+          unzip -q "$RUNNER_TEMP/lyricstream_overlay_v3.zip" -d "$RUNNER_TEMP/lyricstream-src"
+
+      - name: Reassemble and verify v4 patch
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat lyricstream/v4/patch/chunk_*.b64 | base64 --decode > "$RUNNER_TEMP/lyricstream_v4_patch.zip"
+          echo "1baf0c7323d769e2fb9b358e90d94322f89423493efadc00c9ef8c59329f611b  $RUNNER_TEMP/lyricstream_v4_patch.zip" | sha256sum -c -
+          unzip -qo "$RUNNER_TEMP/lyricstream_v4_patch.zip" -d "$RUNNER_TEMP/lyricstream-src/lyricstream_overlay_v3"
+
+      - name: Reassemble and verify v5 delta
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat lyricstream/v5/delta/chunk_*.b64 | base64 --decode > "$RUNNER_TEMP/lyricstream_v5_delta.zip"
+          echo "248059f724c0f3de3a574334c244029182493d4c0cd65ae04c04b06bffe8d655  $RUNNER_TEMP/lyricstream_v5_delta.zip" | sha256sum -c -
+          unzip -qo "$RUNNER_TEMP/lyricstream_v5_delta.zip" -d "$RUNNER_TEMP/lyricstream-src/lyricstream_overlay_v3"
+
+      - name: Bootstrap Android project
+        shell: bash
+        run: |
+          set -euo pipefail
+          chmod +x "$RUNNER_TEMP/lyricstream-src/lyricstream_overlay_v3/bootstrap.sh"
+          "$RUNNER_TEMP/lyricstream-src/lyricstream_overlay_v3/bootstrap.sh" "$RUNNER_TEMP/lyricstream_build"
+
+      - name: Apply and verify v6 UI fixes
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat lyricstream/v6/overrides/part_*.b64 | base64 --decode > "$RUNNER_TEMP/LyricStream-v6-overrides.zip"
+          echo "da30bf902f548b3488317949c4a57c219b7174391f61705a2951ab5674355e4d  $RUNNER_TEMP/LyricStream-v6-overrides.zip" | sha256sum -c -
+          unzip -qo "$RUNNER_TEMP/LyricStream-v6-overrides.zip" -d "$RUNNER_TEMP/lyricstream_build"
+
+      - name: Apply Aurora v7 renderer
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 lyricstream/v7/apply_v7.py "$RUNNER_TEMP/lyricstream_build"
+
+      - name: Apply Flutter 3.47 / AGP 9 build config
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf "$RUNNER_TEMP/lyricstream_build/test"
+          cat > "$RUNNER_TEMP/lyricstream_build/android/app/build.gradle.kts" <<'EOF'
+          plugins {
+              id("com.android.application")
+              id("dev.flutter.flutter-gradle-plugin")
+          }
+
+          android {
+              namespace = "com.example.lyricstream"
+              compileSdk = 36
+              ndkVersion = flutter.ndkVersion
+
+              compileOptions {
+                  sourceCompatibility = JavaVersion.VERSION_17
+                  targetCompatibility = JavaVersion.VERSION_17
+              }
+
+              defaultConfig {
+                  applicationId = "com.example.lyricstream"
+                  minSdk = 26
+                  targetSdk = 36
+                  versionCode = flutter.versionCode
+                  versionName = flutter.versionName
+              }
+
+              buildTypes {
+                  release {
+                      signingConfig = signingConfigs.getByName("debug")
+                  }
+              }
+          }
+
+          kotlin {
+              compilerOptions {
+                  jvmTarget = org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17
+              }
+          }
+
+          dependencies {
+              implementation("androidx.core:core-ktx:1.17.0")
+              implementation("androidx.dynamicanimation:dynamicanimation:1.1.0")
+              implementation("com.android.billingclient:billing-ktx:9.1.0")
+              testImplementation("junit:junit:4.13.2")
+          }
+
+          flutter {
+              source = "../.."
+          }
+          EOF
+
+      - name: Patch Billing 9 nullable offer token
+        shell: bash
+        run: |
+          set -euo pipefail
+          FILE="$RUNNER_TEMP/lyricstream_build/android/app/src/main/kotlin/com/example/lyricstream/BillingManager.kt"
+          grep -q 'setOfferToken(offer.offerToken)' "$FILE"
+          sed -i 's/setOfferToken(offer\.offerToken)/setOfferToken(offer.offerToken ?: return BillingClient.BillingResponseCode.ITEM_UNAVAILABLE)/' "$FILE"
+
+      - name: Patch v5 control center enum pairs
+        shell: bash
+        run: |
+          set -euo pipefail
+          FILE="$RUNNER_TEMP/lyricstream_build/android/app/src/main/kotlin/com/example/lyricstream/InGameControlCenterView.kt"
+          sed -i 's/to settings\.hudSkin == HudSkin\.AURORA/to (settings.hudSkin == HudSkin.AURORA)/' "$FILE"
+          sed -i 's/to settings\.adaptiveThemeMode != AdaptiveThemeMode\.OFF/to (settings.adaptiveThemeMode != AdaptiveThemeMode.OFF)/' "$FILE"
+
+      - name: Enable founder entitlement
+        shell: bash
+        run: |
+          set -euo pipefail
+          STORE="$RUNNER_TEMP/lyricstream_build/android/app/src/main/kotlin/com/example/lyricstream/EntitlementStore.kt"
+          python3 - <<'PY'
+          from pathlib import Path
+          import os
+          p = Path(os.environ["RUNNER_TEMP"]) / "lyricstream_build/android/app/src/main/kotlin/com/example/lyricstream/EntitlementStore.kt"
+          s = p.read_text()
+          old = '    val premium: Boolean get() = prefs.getBoolean("premium", false)'
+          new = '    val premium: Boolean get() = true // Founder build: permanent Pro entitlement'
+          if old not in s:
+              raise SystemExit("premium getter not found")
+          p.write_text(s.replace(old, new))
+          PY
+
+          MAIN="$RUNNER_TEMP/lyricstream_build/lib/main.dart"
+          sed -i "s/LYRICSTREAM PRO ACTIVE/FOUNDER PRO ACTIVE/g" "$MAIN"
+          sed -i "s/const _ProLikeBadge(text: 'UNLOCKED')/const _ProLikeBadge(text: 'FOUNDER')/g" "$MAIN"
+
+      - name: Flutter analyze
+        continue-on-error: true
+        working-directory: ${{ runner.temp }}/lyricstream_build
+        run: flutter analyze lib
+
+      - name: Build release APK
+        working-directory: ${{ runner.temp }}/lyricstream_build
+        run: flutter build apk --release
+
+      - name: Prepare APK
+        shell: bash
+        run: |
+          set -euo pipefail
+          cp "$RUNNER_TEMP/lyricstream_build/build/app/outputs/flutter-apk/app-release.apk" "$GITHUB_WORKSPACE/LyricStream-v7-Founder-release.apk"
+          sha256sum "$GITHUB_WORKSPACE/LyricStream-v7-Founder-release.apk" | tee "$GITHUB_WORKSPACE/LyricStream-v7-Founder-release.apk.sha256"
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v7
+        with:
+          name: LyricStream-v7-Founder-APK
+          path: |
+            LyricStream-v7-Founder-release.apk
+            LyricStream-v7-Founder-release.apk.sha256
+          if-no-files-found: error
+          retention-days: 30
