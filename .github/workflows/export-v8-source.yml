@@ -1,0 +1,50 @@
+name: Export LyricStream v8 Source
+on:
+  push:
+    branches:
+      - lyricstream-v9-founder
+    paths:
+      - ".github/workflows/export-v8-source.yml"
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  export:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Rebuild v8 source
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/lyricstream-src"
+          cat lyricstream/source/chunk_*.b64 | base64 --decode > "$RUNNER_TEMP/v3.zip"
+          unzip -q "$RUNNER_TEMP/v3.zip" -d "$RUNNER_TEMP/lyricstream-src"
+          cat lyricstream/v4/patch/chunk_*.b64 | base64 --decode > "$RUNNER_TEMP/v4.zip"
+          unzip -qo "$RUNNER_TEMP/v4.zip" -d "$RUNNER_TEMP/lyricstream-src/lyricstream_overlay_v3"
+          cat lyricstream/v5/delta/chunk_*.b64 | base64 --decode > "$RUNNER_TEMP/v5.zip"
+          unzip -qo "$RUNNER_TEMP/v5.zip" -d "$RUNNER_TEMP/lyricstream-src/lyricstream_overlay_v3"
+          chmod +x "$RUNNER_TEMP/lyricstream-src/lyricstream_overlay_v3/bootstrap.sh"
+          "$RUNNER_TEMP/lyricstream-src/lyricstream_overlay_v3/bootstrap.sh" "$RUNNER_TEMP/build"
+          cat lyricstream/v6/overrides/part_*.b64 | base64 --decode > "$RUNNER_TEMP/v6.zip"
+          unzip -qo "$RUNNER_TEMP/v6.zip" -d "$RUNNER_TEMP/build"
+          python3 lyricstream/v7/apply_v7.py "$RUNNER_TEMP/build"
+          cat lyricstream/v8/patch/chunk_*.b64 | base64 --decode > "$RUNNER_TEMP/v8.patch.gz"
+          gzip -dc "$RUNNER_TEMP/v8.patch.gz" > "$RUNNER_TEMP/v8.patch"
+          cd "$RUNNER_TEMP/build"
+          patch --batch -p1 < "$RUNNER_TEMP/v8.patch"
+          zip -qr "$GITHUB_WORKSPACE/LyricStream-v8-source.zip" android/app/src/main lib pubspec.yaml
+
+      - name: Upload source
+        uses: actions/upload-artifact@v7
+        with:
+          name: LyricStream-v8-Source
+          path: LyricStream-v8-source.zip
+          retention-days: 2
