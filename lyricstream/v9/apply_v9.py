@@ -204,7 +204,7 @@ helper = r'''    private fun drawReadabilityField(c: Canvas, left: Float, top: F
 
         linePaint.strokeCap = Paint.Cap.ROUND
         linePaint.strokeWidth = dp(2.2f)
-        linePaint.shader = LinearGradient(0f, t, 0f, b, withAlpha(a, 225), withAlpha(b, 70), Shader.TileMode.CLAMP)
+        linePaint.shader = LinearGradient(0f, t, 0f, b, withAlpha(accent, 225), withAlpha(accentB, 70), Shader.TileMode.CLAMP)
         c.drawLine(left - dp(8f), t + dp(7f), left - dp(8f), b - dp(7f), linePaint)
         linePaint.shader = null
     }
