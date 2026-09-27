@@ -1,0 +1,123 @@
+(1f-local) * (1f-local)
+            paint.alpha = (255 * eased * pausedDim).toInt().coerceIn(0,255)
+            val shadowAlpha = (135 * (1f-eased)).toInt().coerceIn(0,135)
+            if (shadowAlpha > 0) paint.setShadowLayer(dp(9f * (1f-eased) + 1f), 0f, -dp(2f * (1f-eased)), withAlpha(accent, shadowAlpha)) else paint.clearShadowLayer()
+            val start = m.range.first
+            val end = m.range.last + 1
+            val lineNo = layout.getLineForOffset(start)
+            val x = layout.getPrimaryHorizontal(start)
+            val baseline = layout.getLineBaseline(lineNo).toFloat()
+            val word = line.text.substring(start,end)
+            c.save()
+            val yShift = dp(3.5f * (1f-eased))
+            val scale = .97f + .03f * eased
+            c.translate(0f, yShift)
+            c.scale(scale, scale, x + paint.measureText(word)*.5f, baseline - paint.textSize*.35f)
+            c.drawText(word, x, baseline, paint)
+            c.restore()
+        }
+        paint.clearShadowLayer()
+    }
+
+    private fun drawMistCloud(c: Canvas, left: Float, top: Float, right: Float, bottom: Float, progress: Float, accent: Int, accentB: Int) {
+        if (!settings.mistMorphEnabled || settings.reduceMotion || settings.performanceMode == PerformanceMode.ECO) return
+        val strength = (1f - kotlin.math.abs(progress - .5f) * 2f).coerceIn(0f,1f)
+        if (strength <= .01f) return
+        val cy = (top + bottom) * .5f
+        val radius = max(dp(58f), (right-left) * .42f)
+        bg.shader = RadialGradient(left + (right-left)*.42f, cy, radius,
+            intArrayOf(withAlpha(accent, (48*strength).toInt()), withAlpha(accentB, (26*strength).toInt()), Color.TRANSPARENT),
+            floatArrayOf(0f,.38f,1f), Shader.TileMode.CLAMP)
+        c.drawRect(left-dp(12f), top-dp(14f), right+dp(12f), bottom+dp(14f), bg)
+        bg.shader = null
+    }
+
+'''
+s=s[:start]+helpers+s[end:]
+
+# Replace drawLyricsState completely.
+start=s.index('    private fun drawLyricsState(')
+end=s.index('    private fun drawPeekState(', start)
+new_draw=r'''    private fun drawLyricsState(c: Canvas, theme: OverlayTheme, accent: Int, accentB: Int, left: Float, right: Float, contentW: Float) {
+        val t = track
+        if (lines.isEmpty()) {
+            tinyPaint.textSize = sp(8.2f)
+            tinyPaint.color = withAlpha(accent, 210)
+            if (height >= dp(86f)) c.drawText(if (t == null) "LYRICSTREAM" else "${t.artist.take(28)} • LIVE", left, dp(18f), tinyPaint)
+            activePaint.textSize = sp(14.4f * settings.fontScale.coerceIn(.8f, 1.35f))
+            activePaint.color = if (settings.darkMode) Color.WHITE else Color.rgb(20,22,28)
+            val y = if (height >= dp(86f)) dp(27f) else dp(10f)
+            val layout = makeFittedLayout(statusText, activePaint, contentW.toInt(), 3, (height-y-dp(8f)).toInt().coerceAtLeast(dp(34f).toInt()), sp(10.2f), Layout.Alignment.ALIGN_NORMAL)
+            c.save(); c.translate(left,y); layout.draw(c); c.restore(); return
+        }
+
+        val idx = activeIndex.coerceAtLeast(0)
+        val line = lines.getOrNull(idx) ?: return
+        val compact = height < dp(90f)
+        val flow = settings.lyricMode == LyricMode.STACK && height >= dp(116f)
+        val minimal = settings.lyricMode == LyricMode.MINIMAL
+        val karaoke = settings.lyricMode == LyricMode.KARAOKE
+
+        // Lyrics are the hero. Track metadata only appears as a tiny transient chip after a track change.
+        val showMicroHeader = trackChangedAtMs > 0L && SystemClock.elapsedRealtime() - trackChangedAtMs < 2_100L && height >= dp(110f)
+        if (showMicroHeader) {
+            tinyPaint.textSize = sp(7.8f)
+            tinyPaint.color = withAlpha(if (settings.darkMode) Color.WHITE else Color.BLACK, 118)
+            val header = t?.let { "${it.title.take(20)}  •  ${it.artist.take(18)}" } ?: "LIVE LYRICS"
+            c.drawText(ellipsize(header, tinyPaint, contentW * .82f), left, dp(16f), tinyPaint)
+        }
+
+        val baseSp = when {
+            minimal -> if (compact) 15.6f else 18.2f
+            settings.lyricMode == LyricMode.FOCUS -> if (compact) 16.2f else 20.2f
+            karaoke -> if (compact) 15.8f else 18.8f
+            else -> if (compact) 15.1f else 17.4f
+        } * settings.fontScale.coerceIn(.75f, 1.45f)
+        activePaint.textSize = sp(baseSp)
+        activePaint.color = withAlpha(if (settings.darkMode) Color.WHITE else Color.rgb(16,19,24), (255*pausedDim).toInt())
+        activePaint.typeface = Typeface.create("sans-serif", Typeface.BOLD)
+        if (settings.glowEnabled && settings.hudSkin == HudSkin.AURORA) {
+            activePaint.setShadowLayer(dp(8.5f), 0f, 0f, withAlpha(accent, 148))
+        } else activePaint.clearShadowLayer()
+
+        val topReserve = when { flow -> dp(28f); showMicroHeader -> dp(20f); else -> dp(7f) }
+        val secondary = secondary(line)
+        val bottomReserve = when { flow -> dp(31f); secondary != null && height >= dp(118f) -> dp(24f); else -> dp(8f) }
+        val availableHeight = (height - topReserve - bottomReserve).toInt().coerceAtLeast(dp(36f).toInt())
+        val maxLines = when {
+            minimal && compact -> 2
+            minimal -> 2
+            height >= dp(164f) -> 4
+            height >= dp(124f) -> 3
+            else -> 2
+        }
+        val layout = makeFittedLayout(line.text, activePaint, contentW.toInt(), maxLines, availableHeight, sp(8.8f), Layout.Alignment.ALIGN_NORMAL)
+        val textY = ((height - layout.height) * .50f).coerceIn(topReserve, (height - bottomReserve - layout.height).coerceAtLeast(topReserve))
+
+        drawReadabilityField(c, left, textY, right, textY + layout.height, accent, accentB)
+        drawLyricBloom(c, left, textY, right, textY + layout.height, accent, accentB)
+        if (karaoke) drawWordFocusGlow(c, layout, line, idx, left, textY, accent, accentB)
+
+        val morph = mistTransitionProgress()
+        if (morph < 1f && settings.mistMorphEnabled) {
+            previousLyric?.let { prev -> drawOutgoingMist(c, prev, left, textY, contentW, maxLines, availableHeight, morph, accent) }
+            drawMistCloud(c, left, textY, right, textY + layout.height, morph, accent, accentB)
+            c.save(); c.translate(left, textY); c.scale(activeScale, activeScale, 0f, 0f); drawIncomingMist(c, layout, line, morph, accent); c.restore()
+            postInvalidateDelayed(if (settings.performanceMode == PerformanceMode.ULTRA) 16L else 32L)
+        } else {
+            c.save(); c.translate(left, textY); c.scale(activeScale, activeScale, 0f, 0f); layout.draw(c)
+            if (karaoke) drawWordKaraoke(c, layout, line, idx, accent, accentB)
+            c.restore()
+        }
+
+        if (flow) {
+            metaPaint.typeface = Typeface.create("sans-serif", Typeface.NORMAL)
+            lines.getOrNull(idx - 1)?.let { prev ->
+                metaPaint.textSize = sp(9.0f * settings.fontScale.coerceIn(.8f,1.2f)); metaPaint.color = withAlpha(if (settings.darkMode) Color.WHITE else Color.BLACK, 54)
+                c.drawText(ellipsize(prev.text, metaPaint, contentW * .90f), left + dp(5f), dp(17f), metaPaint)
+            }
+            lines.getOrNull(idx + 1)?.let { next ->
+                metaPaint.textSize = sp(9.2f * settings.fontScale.coerceIn(.8f,1.2f)); metaPaint.color = withAlpha(if (settings.darkMode) Color.WHITE else Color.BLACK, 78)
+                c.drawText(ellipsize(next.text, metaPaint, contentW * .94f), left + dp(5f), height - dp(13f), metaPaint)
+            }
+        } else 
