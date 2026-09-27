@@ -105,15 +105,13 @@ jobs:
           set -euo pipefail
           python3 lyricstream/v9/apply_v9.py "$RUNNER_TEMP/lyricstream_build"
 
-      - name: Apply and verify v10 Aura Flow + Mist Morph patch
+      - name: Apply v10 Aura Flow + Mist Morph overrides
         shell: bash
         run: |
           set -euo pipefail
-          cat lyricstream/v10/patch/chunk_*.b64 | base64 --decode > "$RUNNER_TEMP/LyricStream-v10.patch.gz"
-          echo "0913d33d7e9ec776afbb4479c59005529a190115557e28adc42dc6badea0c234  $RUNNER_TEMP/LyricStream-v10.patch.gz" | sha256sum -c -
-          gzip -dc "$RUNNER_TEMP/LyricStream-v10.patch.gz" > "$RUNNER_TEMP/LyricStream-v10.patch"
-          cd "$RUNNER_TEMP/lyricstream_build"
-          patch --batch -p1 < "$RUNNER_TEMP/LyricStream-v10.patch"
+          cat lyricstream/v10/overrides/chunk_*.b64 | base64 --decode > "$RUNNER_TEMP/LyricStream-v10-overrides.zip"
+          echo "25ce880b1e5b30ac08d04947d9966d1dc06f92bb7be82fb3befae3c2db903144  $RUNNER_TEMP/LyricStream-v10-overrides.zip" | sha256sum -c -
+          unzip -qo "$RUNNER_TEMP/LyricStream-v10-overrides.zip" -d "$RUNNER_TEMP/lyricstream_build"
 
       - name: Apply Flutter 3.47 / AGP 9 build config
         shell: bash
@@ -209,13 +207,14 @@ jobs:
         run: |
           set -euo pipefail
           ROOT="$RUNNER_TEMP/lyricstream_build"
-          grep -q "object TrackMatcher" "$ROOT/android/app/src/main/kotlin/com/example/lyricstream/TrackMatcher.kt"
-          grep -q "object RuntimeDiagnostics" "$ROOT/android/app/src/main/kotlin/com/example/lyricstream/RuntimeDiagnostics.kt"
-          grep -q "LyricMode.FLOW" "$ROOT/android/app/src/main/kotlin/com/example/lyricstream/LyricOverlayView.kt"
-          grep -q "drawMistMorph" "$ROOT/android/app/src/main/kotlin/com/example/lyricstream/LyricOverlayView.kt"
+          grep -q "mistMorphEnabled" "$ROOT/android/app/src/main/kotlin/com/example/lyricstream/OverlaySettings.kt"
+          grep -q "wordKaraokeEnabled" "$ROOT/android/app/src/main/kotlin/com/example/lyricstream/OverlaySettings.kt"
+          grep -q "drawOutgoingMist" "$ROOT/android/app/src/main/kotlin/com/example/lyricstream/LyricOverlayView.kt"
+          grep -q "drawIncomingMist" "$ROOT/android/app/src/main/kotlin/com/example/lyricstream/LyricOverlayView.kt"
           grep -q "drawWordKaraoke" "$ROOT/android/app/src/main/kotlin/com/example/lyricstream/LyricOverlayView.kt"
-          grep -q "showTrackPeek" "$ROOT/android/app/src/main/kotlin/com/example/lyricstream/OverlayService.kt"
-          grep -q "1.0.0+10" "$ROOT/pubspec.yaml"
+          grep -q "SAVE GAME PROFILE" "$ROOT/android/app/src/main/kotlin/com/example/lyricstream/InGameControlCenterView.kt"
+          grep -q "Mist Morph" "$ROOT/lib/main.dart"
+          grep -q "0.10.0+10" "$ROOT/pubspec.yaml"
 
       - name: Flutter analyze
         continue-on-error: true
