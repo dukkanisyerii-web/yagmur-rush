@@ -1,0 +1,166 @@
+gs.reduceMotion || lyricChangedAtMs <= 0L) return 1f
+        return ((SystemClock.elapsedRealtime() - lyricChangedAtMs) / 430f).coerceIn(0f, 1f)
+    }
+
+    private fun wordSlots(line: LyricLine, index: Int): List<WordSlot> {
+        val matches = Regex("\\S+").findAll(line.text).toList()
+        if (matches.isEmpty()) return emptyList()
+        val nextLineTime = lines.getOrNull(index + 1)?.timeMs
+            ?: track?.durationMs?.takeIf { it > line.timeMs }
+            ?: (line.timeMs + 4_000L)
+        val duration = (nextLineTime - line.timeMs).coerceIn(900L, 12_000L)
+        return matches.mapIndexed { i, m ->
+            val explicitStart = line.words.getOrNull(i)?.timeMs
+            val explicitEnd = line.words.getOrNull(i + 1)?.timeMs
+            val startMs = explicitStart ?: (line.timeMs + (duration * i / matches.size))
+            val endMs = explicitEnd ?: (line.timeMs + (duration * (i + 1) / matches.size))
+            WordSlot(m.range.first, m.range.last + 1, startMs, max(startMs + 90L, endMs))
+        }
+    }
+
+    private fun currentWordSlot(line: LyricLine, index: Int): Pair<WordSlot, Float>? {
+        val slots = wordSlots(line, index)
+        if (slots.isEmpty()) return null
+        var current = slots.indexOfLast { positionMs >= it.startMs }
+        if (current < 0) current = 0
+        current = current.coerceAtMost(slots.lastIndex)
+        val slot = slots[current]
+        val local = ((positionMs - slot.startMs).toFloat() / max(1L, slot.endMs - slot.startMs).toFloat()).coerceIn(0f, 1f)
+        return slot to local
+    }
+
+    private fun drawWordFocusGlow(
+        c: Canvas,
+        layout: StaticLayout,
+        line: LyricLine,
+        index: Int,
+        left: Float,
+        top: Float,
+        accent: Int,
+        accentB: Int,
+    ) {
+        if (!settings.glowEnabled || settings.hudSkin != HudSkin.AURORA || settings.performanceMode == PerformanceMode.ECO) return
+        val pair = currentWordSlot(line, index) ?: return
+        val slot = pair.first
+        val lineNo = layout.getLineForOffset(slot.start.coerceAtMost(line.text.length))
+        val sx = layout.getPrimaryHorizontal(slot.start).coerceAtLeast(0f)
+        val ex = layout.getPrimaryHorizontal(slot.end.coerceAtMost(line.text.length)).coerceAtLeast(sx + dp(12f))
+        val cx = left + (sx + ex) * .5f
+        val cy = top + (layout.getLineTop(lineNo) + layout.getLineBottom(lineNo)) * .5f
+        val radius = max(dp(44f), (ex - sx) * 1.8f)
+        val pulse = reactivePulse()
+        bg.shader = RadialGradient(
+            cx, cy, radius,
+            intArrayOf(
+                withAlpha(Color.WHITE, (28 + 22 * pulse).toInt()),
+                withAlpha(accent, (112 + 46 * pulse).toInt()),
+                withAlpha(accentB, 48),
+                Color.TRANSPARENT,
+            ),
+            floatArrayOf(0f, .20f, .52f, 1f),
+            Shader.TileMode.CLAMP
+        )
+        c.drawCircle(cx, cy, radius, bg)
+        bg.shader = null
+    }
+
+    private fun drawWordKaraoke(
+        c: Canvas,
+        layout: StaticLayout,
+        line: LyricLine,
+        index: Int,
+        accent: Int,
+        accentB: Int,
+    ) {
+        if (!settings.wordKaraokeEnabled) {
+            val progress = lyricProgress(index)
+            val accentText = TextPaint(activePaint).apply { color = accent }
+            val accentLayout = makeLayout(line.text, accentText, layout.width, max(1, layout.lineCount), Layout.Alignment.ALIGN_NORMAL)
+            c.save(); c.clipRect(0f, 0f, layout.width * progress, accentLayout.height.toFloat()); accentLayout.draw(c); c.restore()
+            return
+        }
+        val slots = wordSlots(line, index)
+        if (slots.isEmpty()) return
+        val completePaint = TextPaint(activePaint).apply {
+            color = blend(if (settings.darkMode) Color.WHITE else Color.rgb(18,20,24), accent, .78f)
+            alpha = (235 * pausedDim).toInt().coerceIn(0,255)
+            clearShadowLayer()
+        }
+        val currentPaint = TextPaint(activePaint).apply {
+            color = blend(Color.WHITE, accent, .32f)
+            alpha = (255 * pausedDim).toInt().coerceIn(0,255)
+            if (settings.glowEnabled) setShadowLayer(dp(10f), 0f, 0f, withAlpha(accentB, 185))
+        }
+        for (slot in slots) {
+            if (positionMs < slot.startMs) break
+            val lineNo = layout.getLineForOffset(slot.start.coerceAtMost(line.text.length))
+            val x = layout.getPrimaryHorizontal(slot.start)
+            val baseline = layout.getLineBaseline(lineNo).toFloat()
+            val word = line.text.substring(slot.start, slot.end)
+            if (positionMs >= slot.endMs) {
+                c.drawText(word, x, baseline, completePaint)
+            } else {
+                val local = ((positionMs - slot.startMs).toFloat() / max(1L, slot.endMs - slot.startMs).toFloat()).coerceIn(0f, 1f)
+                val w = currentPaint.measureText(word)
+                c.save()
+                val scale = 1.0f + .045f * sin(local * Math.PI).toFloat()
+                c.scale(scale, scale, x + w * .5f, baseline - currentPaint.textSize * .35f)
+                c.drawText(word, x, baseline, currentPaint)
+                c.restore()
+            }
+        }
+        currentPaint.clearShadowLayer()
+    }
+
+    private fun drawOutgoingMist(
+        c: Canvas,
+        line: LyricLine,
+        left: Float,
+        top: Float,
+        contentW: Float,
+        maxLines: Int,
+        availableHeight: Int,
+        progress: Float,
+        accent: Int,
+    ) {
+        if (progress >= 1f) return
+        val p = TextPaint(activePaint).apply {
+            color = if (settings.darkMode) Color.WHITE else Color.rgb(18,20,24)
+            alpha = ((1f - progress) * 185f * pausedDim).toInt().coerceIn(0,255)
+            setShadowLayer(dp(8f + 6f * progress), 0f, -dp(1.5f * progress), withAlpha(accent, ((1f-progress)*120).toInt()))
+        }
+        val layout = makeFittedLayout(line.text, p, contentW.toInt(), maxLines, availableHeight, sp(9.2f), Layout.Alignment.ALIGN_NORMAL)
+        val slices = when (settings.performanceMode) { PerformanceMode.ECO -> 1; PerformanceMode.BALANCED -> 4; PerformanceMode.ULTRA -> 7 }
+        for (i in 0 until slices) {
+            val y0 = layout.height * i / slices.toFloat()
+            val y1 = layout.height * (i + 1) / slices.toFloat() + 1f
+            val driftX = sin((i + 1) * 1.37f + progress * 3.2f) * dp(5f) * progress
+            val driftY = -dp(5f + i * .9f) * progress
+            c.save()
+            c.clipRect(left, top + y0, left + contentW, top + y1)
+            c.translate(left + driftX, top + driftY)
+            layout.draw(c)
+            c.restore()
+        }
+        p.clearShadowLayer()
+    }
+
+    private fun drawIncomingMist(
+        c: Canvas,
+        layout: StaticLayout,
+        line: LyricLine,
+        progress: Float,
+        accent: Int,
+    ) {
+        val slots = Regex("\\S+").findAll(line.text).toList()
+        if (slots.isEmpty()) {
+            val a = (255 * progress).toInt().coerceIn(0,255)
+            val save = c.saveLayerAlpha(0f, 0f, layout.width.toFloat(), layout.height.toFloat(), a)
+            layout.draw(c); c.restoreToCount(save); return
+        }
+        val paint = TextPaint(activePaint)
+        slots.forEachIndexed { i, m ->
+            val delay = (i.coerceAtMost(7)) * .035f
+            val local = ((progress - delay) / (1f - delay).coerceAtLeast(.2f)).coerceIn(0f,1f)
+            if (local <= 0f) return@forEachIndexed
+            val eased = 1f - 
