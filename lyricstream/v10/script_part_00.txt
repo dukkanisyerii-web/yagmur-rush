@@ -1,0 +1,148 @@
+from pathlib import Path
+import sys
+root=Path(sys.argv[1])
+
+# ---------------- OverlaySettings.kt ----------------
+p=root/'android/app/src/main/kotlin/com/example/lyricstream/OverlaySettings.kt'
+s=p.read_text()
+s=s.replace('''    val smartTextFit: Boolean = true,
+    val glowEnabled: Boolean = true,''','''    val smartTextFit: Boolean = true,
+    val mistMorphEnabled: Boolean = true,
+    val wordKaraokeEnabled: Boolean = true,
+    val glowEnabled: Boolean = true,''',1)
+s=s.replace('''        if (visualVersion < 8) {
+            val currentSkin = prefs.getString("hudSkin", null)
+            val editor = prefs.edit().putInt("visualUpgradeVersion", 8)''','''        if (visualVersion < 10) {
+            val currentSkin = prefs.getString("hudSkin", null)
+            val editor = prefs.edit().putInt("visualUpgradeVersion", 10)''',1)
+s=s.replace('''            editor.putBoolean("reactiveLight", true)
+            editor.putBoolean("smartTextFit", true)
+            editor.apply()''','''            editor.putBoolean("reactiveLight", true)
+            editor.putBoolean("smartTextFit", true)
+            editor.putBoolean("mistMorphEnabled", true)
+            editor.putBoolean("wordKaraokeEnabled", true)
+            editor.apply()''',1)
+s=s.replace('''        reactiveLight = prefs.getBoolean("reactiveLight", true),
+        smartTextFit = prefs.getBoolean("smartTextFit", true),
+        glowEnabled = prefs.getBoolean("glowEnabled", true),''','''        reactiveLight = prefs.getBoolean("reactiveLight", true),
+        smartTextFit = prefs.getBoolean("smartTextFit", true),
+        mistMorphEnabled = prefs.getBoolean("mistMorphEnabled", true),
+        wordKaraokeEnabled = prefs.getBoolean("wordKaraokeEnabled", true),
+        glowEnabled = prefs.getBoolean("glowEnabled", true),''',1)
+s=s.replace('''                "creatorMode", "autoHideWhenIdle", "onboardingComplete", "panelEnabled", "autoGameProfile", "reactiveLight", "smartTextFit" ->
+                    (value as? Boolean)?.let { e.putBoolean(key, it) }''','''                "creatorMode", "autoHideWhenIdle", "onboardingComplete", "panelEnabled", "autoGameProfile", "reactiveLight", "smartTextFit",
+                "mistMorphEnabled", "wordKaraokeEnabled" ->
+                    (value as? Boolean)?.let { e.putBoolean(key, it) }''',1)
+p.write_text(s)
+
+# ---------------- MainActivity.kt ----------------
+p=root/'android/app/src/main/kotlin/com/example/lyricstream/MainActivity.kt'
+s=p.read_text()
+s=s.replace('''        "reactiveLight" to s.reactiveLight,
+        "smartTextFit" to s.smartTextFit,
+        "glowEnabled" to s.glowEnabled,''','''        "reactiveLight" to s.reactiveLight,
+        "smartTextFit" to s.smartTextFit,
+        "mistMorphEnabled" to s.mistMorphEnabled,
+        "wordKaraokeEnabled" to s.wordKaraokeEnabled,
+        "glowEnabled" to s.glowEnabled,''',1)
+p.write_text(s)
+
+# ---------------- LyricOverlayView.kt ----------------
+p=root/'android/app/src/main/kotlin/com/example/lyricstream/LyricOverlayView.kt'
+s=p.read_text()
+
+s=s.replace('''    var lines: List<LyricLine> = emptyList()
+        set(value) { field = value; activeIndex = -1; invalidate() }''','''    var lines: List<LyricLine> = emptyList()
+        set(value) { field = value; activeIndex = -1; previousLyric = null; invalidate() }''',1)
+
+s=s.replace('''    var track: TrackInfo? = null
+        set(value) {
+            val oldAccent = field?.accentColor
+            field = value''','''    var track: TrackInfo? = null
+        set(value) {
+            val oldTrack = field
+            val oldAccent = oldTrack?.accentColor
+            field = value
+            if (value?.identity != null && value.identity != oldTrack?.identity) trackChangedAtMs = SystemClock.elapsedRealtime()''',1)
+
+s=s.replace('''    private var lyricPulseAtMs = 0L
+    private var lyricChangedAtMs = 0L''','''    private var lyricPulseAtMs = 0L
+    private var lyricChangedAtMs = 0L
+    private var trackChangedAtMs = 0L
+    private var previousLyric: LyricLine? = null
+
+    private data class WordSlot(val start: Int, val end: Int, val startMs: Long, val endMs: Long)''',1)
+
+# Make Aurora surface more local / cardless.
+old='''        // Aurora v7: no hard card. A subtle ink veil protects readability while the
+        // colored light itself stays visibly separated from the game underneath.
+        bg.shader = RadialGradient(
+            width * .50f, height * .52f, max(width, height) * .66f,
+            intArrayOf(
+                withAlpha(Color.BLACK, (118 * alphaScale).toInt()),
+                withAlpha(Color.BLACK, (58 * alphaScale).toInt()),
+                Color.TRANSPARENT
+            ),
+            floatArrayOf(0f, .48f, 1f),
+            Shader.TileMode.CLAMP
+        )
+        c.drawRect(outer, bg)'''
+new='''        // V10 Aura Flow is intentionally cardless: light stays around the typography
+        // instead of filling the entire overlay rectangle.
+        val field = RectF(dp(3f), height * .08f, width - dp(3f), height * .92f)
+        bg.shader = RadialGradient(
+            width * .50f, height * .52f, max(width, height) * .54f,
+            intArrayOf(
+                withAlpha(Color.BLACK, (82 * alphaScale).toInt()),
+                withAlpha(Color.BLACK, (24 * alphaScale).toInt()),
+                Color.TRANSPARENT
+            ),
+            floatArrayOf(0f, .52f, 1f),
+            Shader.TileMode.CLAMP
+        )
+        c.drawRect(field, bg)'''
+assert old in s
+s=s.replace(old,new,1)
+s=s.replace('c.drawRect(outer, bg)
+        }
+
+        orb(x1', 'c.drawRect(field, bg)
+        }
+
+        orb(x1',1)
+# replace subsequent full-field draws in aurora function only using segment split
+start=s.index('    private fun drawAuroraSurface(')
+end=s.index('    private fun drawLyricBloom(', start)
+seg=s[start:end]
+seg=seg.replace('c.drawRect(outer, bg)', 'c.drawRect(field, bg)')
+s=s[:start]+seg+s[end:]
+
+# Readability field: remove the decorative vertical line for PURE_TEXT/AURORA.
+old='''        linePaint.strokeCap = Paint.Cap.ROUND
+        linePaint.strokeWidth = dp(2.2f)
+        linePaint.shader = LinearGradient(0f, t, 0f, b, withAlpha(accent, 225), withAlpha(accentB, 70), Shader.TileMode.CLAMP)
+        c.drawLine(left - dp(8f), t + dp(7f), left - dp(8f), b - dp(7f), linePaint)
+        linePaint.shader = null'''
+new='''        if (settings.hudSkin == HudSkin.GLASS || settings.hudSkin == HudSkin.RIBBON) {
+            linePaint.strokeCap = Paint.Cap.ROUND
+            linePaint.strokeWidth = dp(1.7f)
+            linePaint.shader = LinearGradient(0f, t, 0f, b, withAlpha(accent, 180), withAlpha(accentB, 55), Shader.TileMode.CLAMP)
+            c.drawLine(left - dp(8f), t + dp(7f), left - dp(8f), b - dp(7f), linePaint)
+            linePaint.shader = null
+        }'''
+assert old in s
+s=s.replace(old,new,1)
+
+# Replace lyric enter helper with full Mist Morph / word helpers.
+start=s.index('    private fun lyricEnterProgress(): Float {')
+end=s.index('    private fun drawLyricsState(', start)
+helpers=r'''    private fun lyricEnterProgress(): Float {
+        if (settings.reduceMotion || lyricChangedAtMs <= 0L) return 1f
+        val age = (SystemClock.elapsedRealtime() - lyricChangedAtMs).coerceAtLeast(0L)
+        if (age >= 440L) return 1f
+        val t = (age / 440f).coerceIn(0f, 1f)
+        return 1f - (1f - t) * (1f - t)
+    }
+
+    private fun mistTransitionProgress(): Float {
+        if (!settings.mistMorphEnabled || settin
